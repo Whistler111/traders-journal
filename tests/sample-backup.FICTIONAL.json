@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "exportedAt": "2026-10-18T15:00:00.000Z",
+  "trades": [
+    {
+      "date": "2026-10-18T14:30",
+      "symbol": "XAUUSD",
+      "setup": "Example setup",
+      "reason": "FICTIONAL EXAMPLE: entry confirmation recorded.",
+      "lesson": "FICTIONAL EXAMPLE ONLY. Not an actual trade.",
+      "direction": "Long",
+      "session": "London",
+      "emotion": "Calm",
+      "status": "closed",
+      "followed": "yes",
+      "entry": 2700,
+      "stop": 2690,
+      "risk": 25,
+      "id": "example-win-001",
+      "pnl": 50
+    },
+    {
+      "date": "2026-10-18T15:00",
+      "symbol": "XAUUSD",
+      "setup": "Example setup",
+      "reason": "FICTIONAL EXAMPLE: entry confirmation recorded.",
+      "lesson": "FICTIONAL EXAMPLE ONLY. Not an actual trade.",
+      "direction": "Long",
+      "session": "London",
+      "emotion": "Calm",
+      "status": "closed",
+      "followed": "no",
+      "entry": 2700,
+      "stop": 2690,
+      "risk": 25,
+      "id": "example-loss-002",
+      "pnl": -25
+    },
+    {
+      "date": "2026-10-18T15:30",
+      "symbol": "XAUUSD",
+      "setup": "Example setup",
+      "reason": "FICTIONAL EXAMPLE: entry confirmation recorded.",
+      "lesson": "FICTIONAL EXAMPLE ONLY. Not an actual trade.",
+      "direction": "Long",
+      "session": "London",
+      "emotion": "Calm",
+      "status": "closed",
+      "followed": "yes",
+      "entry": 2700,
+      "stop": 2690,
+      "risk": 25,
+      "id": "example-flat-003",
+      "pnl": 0
+    }
+  ]
+}

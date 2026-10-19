@@ -1,0 +1,7 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    { "collectionGroup": "images", "fieldPath": "dataUrl", "indexes": [] },
+    { "collectionGroup": "settings", "fieldPath": "practice", "indexes": [] }
+  ]
+}
