@@ -79,7 +79,7 @@ export default function Overview() {
   ];
   return (
     <>
-      <div className="page-heading">
+      <div className="page-heading" data-tour="overview">
         <div>
           <p className="eyebrow">YOUR JOURNAL. YOUR PACE.</p>
           <h1>Make every trade a lesson.</h1>

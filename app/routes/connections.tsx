@@ -32,7 +32,11 @@ export default function Connections() {
           <p>Your trades and reflections sync to your private account.</p>
         </div>
       </div>
-      <section className="card sync-panel" aria-label="Your account">
+      <section
+        className="card sync-panel"
+        aria-label="Your account"
+        data-tour="account"
+      >
         <h2>Your trading space</h2>
         <p className="sync-state">
           {user?.email || user?.displayName || "Signed in"} - {trades.length}{" "}

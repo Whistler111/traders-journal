@@ -48,7 +48,7 @@ export function PracticeHub() {
   return (
     <section className="practice-hub" aria-label="Your trading practice">
       <div className="practice-columns">
-        <section className="card">
+        <section className="card" data-tour="playbooks">
           <div className="section-heading">
             <div>
               <p className="eyebrow">A PLAN YOU CAN REPEAT</p>
@@ -204,7 +204,7 @@ export function PracticeHub() {
             </form>
           )}
         </section>
-        <section className="card">
+        <section className="card" data-tour="reflection">
           <div className="section-heading">
             <div>
               <p className="eyebrow">A MOMENT TO CHECK IN</p>

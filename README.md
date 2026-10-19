@@ -33,7 +33,7 @@ The production server normally uses `http://localhost:3000`. Set `PORT` to chang
 
 - `/` and `/overview`: four performance statistics and cumulative realized P&L.
 - `/journal`: create, view/edit, reopen/close, delete, search, and outcome filtering.
-- `/review`: grouped analysis by setup/session/plan adherence, total realized R, and 30/50-trade review progress.
+- `/review`: grouped analysis by setup/session/plan adherence, total realized R, and coverage of written trade reviews.
 - `/review` also contains playbooks, daily reflections, and grouping by playbook or mistake tag.
 - `/connections`: account, email verification, device import, sign-out and broker connection guidance; reachable from Manage data.
 - Original `/#overview`, `/#journal`, and `/#review` links redirect through React Router.
@@ -59,7 +59,7 @@ JSON backups retain the exact **`{version: 1, trades: [...]}`** envelope. **`tra
 
 Nothing is seeded. `tests/sample-backup.FICTIONAL.json` contains invented data used only by automated tests. The supplied source is retained locally in the ignored `.reference/` directory for inspection; the application does not load its scripts.
 
-Saving updates the interface only after screenshot uploads (when applicable) and the Firestore transaction both succeed. Duplicate submissions are guarded and controls are disabled while images are processed or saved. Storage errors retain the form. Unreadable cloud records block ordinary writes rather than being silently discarded. Backups are fully validated before replacement. Transactions compare a shared account revision and refuse stale-device overwrites; reload to review newer records. Theme, account-scoped alert preferences/delivery history, and optional milestone feedback may remain on-device, but no application-auth flag or active trade database is kept in sessionStorage/localStorage.
+Saving updates the interface only after screenshot uploads (when applicable) and the Firestore transaction both succeed. Duplicate submissions are guarded and controls are disabled while images are processed or saved. Storage errors retain the form. Unreadable cloud records block ordinary writes rather than being silently discarded. Backups are fully validated before replacement. Transactions compare a shared account revision and refuse stale-device overwrites; reload to review newer records. Theme and account-scoped alert preferences/delivery history may remain on-device, but no application-auth flag or active trade database is kept in sessionStorage/localStorage.
 
 ### Existing device journal
 
@@ -82,6 +82,14 @@ The blank template includes `date,symbol,direction,entry,stop,risk,status,pnl,re
 Dates accept ISO `YYYY-MM-DD HH:mm[:ss]` or explicit DD/MM/YYYY / MM/DD/YYYY selection. ISO UTC offsets override the selected timezone. Nonexistent or ambiguous daylight-saving wall times are rejected; supply an explicit offset to resolve them. Import provenance retains the UTC instant, source timezone and optional trade/position ID; the legacy date still displays in the current browser's local time.
 
 Matching source IDs and identical financial records are excluded by default, including repeats within the file. Identical-looking fills can be separate real trades: they can only be included by explicitly enabling flagged duplicates and accepting an additional confirmation. Use unique broker trade/position IDs and review them carefully. Raw TradingView order history is **not** automatically reconstructed into completed positions: unfilled orders, partial fills, reversals, fees and missing risk/reasons require reconciliation. No stop, risk, reason or realized result is invented to force an import through.
+
+## First-visit guide and review recognition
+
+New or previously un-onboarded accounts see a five-step guide after their cloud journal loads: Overview, Journal, Playbooks, Daily reflection, and Account/backups. The bubble highlights the relevant section and offers Next, Back and Skip. Escape acts as Skip. Quick tour in the workspace footer replays the guide. It waits while a trade form or preview is open.
+
+Progress is stored separately at `users/{uid}/settings/onboarding` with a version, step, active/completed/skipped status and server timestamps. Existing owner-only Firestore rules cover it. Next/Back advance only after acknowledgement; an active guide resumes on a later login. Completion and Skip prevent automatic repeat. Initial guide-loading failure does not block the journal; a failed progress save retains the current step and provides Close for now, which only dismisses it for that visit. No trades are created or imported by the guide, and no onboarding flag is kept in localStorage/sessionStorage. Onboarding preferences are not part of financial JSON backups.
+
+Trade saves have a neutral confirmation for every outcome. A newly completed written closed-trade review receives a quiet acknowledgement when the trader also records whether the plan was followed (yes or no). A daily reflection receives recognition when both what worked and one adjustment have been written. Re-saving an already complete review or restoring a backup does not trigger the acknowledgement. Recognition describes recorded reflection; it does not score the quality of the text, predict performance or reward trading volume. Review shows coverage of existing closed trades with reflection/plan review rather than a 30/50-trade target.
 
 ## Appearance
 
@@ -146,7 +154,7 @@ See [TradingView / TradeZella research and proposed next steps](docs/tradingview
 
 `FeedbackAnimation` lazy-loads the lightweight `lottie-web` player and local JSON. Static icons work without artwork. Reduced motion disables animation loading, counter motion, and CSS transitions. Event feedback is nonblocking and dismisses after 2.2 seconds. Loss feedback is calm and prompts review.
 
-The first 10 records and five consecutive closed trades following the plan trigger deduplicated process milestones. The five-trade milestone counts plan adherence regardless of profit or loss, in recorded trade-date order. Ordinary edits, refresh, and Strict Mode do not replay already recognized milestones.
+The star feedback acknowledges newly recorded reflection and plan review, or a daily reflection with both what worked and one adjustment. Trade-count and attendance streak celebrations are not part of the journal workflow.
 
 **Included original vector artwork** (generated from `scripts/create-feedback-art.mjs`):
 
@@ -201,7 +209,7 @@ True background delivery is not implemented. The current Node/Docker app would n
 
 ## Verification
 
-Vitest covers calculations, validation, notes, backup compatibility, storage failure, stale tabs, React forms, routes/hash redirects, filtering/deletion, milestone deduplication, reduced motion, missing artwork, mocked Lottie cleanup, clipboard fingerprint/session deduplication, price direction/threshold/cooldown/staggering, provider adapters, shared caching, and quota/backoff behavior. Tests use isolated storage and mocked provider responses, never seeded real journals or paid API calls.
+Vitest covers calculations, validation, notes, backup compatibility, storage failure, stale tabs, React forms, routes/hash redirects, filtering/deletion, review-feedback deduplication, reduced motion, missing artwork, mocked Lottie cleanup, clipboard fingerprint/session deduplication, price direction/threshold/cooldown/staggering, provider adapters, shared caching, and quota/backoff behavior. Tests use isolated storage and mocked provider responses, never seeded real journals or paid API calls.
 
 ```powershell
 npm.cmd run test:browser

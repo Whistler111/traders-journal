@@ -35,7 +35,7 @@ export default function Journal() {
   ].sort();
   return (
     <>
-      <div className="page-heading">
+      <div className="page-heading" data-tour="journal">
         <div>
           <p className="eyebrow">A RECORD YOU CAN COME BACK TO</p>
           <h1>

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { TradePreview } from "../components/trade-preview";
 import { ThemeToggle } from "../components/theme-toggle";
+import { OnboardingTour } from "../components/onboarding-tour";
 export interface WorkspaceContext {
   edit: (trade?: Trade) => void;
   view: (trade: Trade) => void;
@@ -152,6 +153,7 @@ function Workspace() {
         <footer>
           <LockKeyhole size={12} aria-hidden="true" /> Synced to your account.
           Keep a JSON backup for an independent copy.
+          <OnboardingTour enabled={ready && !error && !editing && !previewId} />
         </footer>
       </main>
       {editing && (

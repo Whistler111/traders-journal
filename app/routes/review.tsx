@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { hasTradeReview } from "../lib/review-progress";
 import { PracticeHub } from "../components/practice-hub";
 import { useJournal } from "../components/provider";
 import { percent, rFormat, stats, tone, type Trade } from "../lib/journal";
@@ -11,7 +12,7 @@ export default function Review() {
       "setup" | "session" | "followed" | "playbook" | "mistake"
     >("setup"),
     s = stats(trades),
-    target = s.n < 30 ? 30 : 50;
+    reviewed = s.closed.filter(hasTradeReview).length;
   const groups = new Map<string, { label: string; trades: Trade[] }>();
   for (const t of s.closed) {
     const labels =
@@ -49,8 +50,8 @@ export default function Review() {
       <section className="card">
         <div className="section-heading">
           <div>
-            <h2>Build a meaningful sample</h2>
-            <p>Review after 30–50 closed trades.</p>
+            <h2>Make space for reflection</h2>
+            <p>Read your notes alongside your results.</p>
           </div>
           <select
             aria-label="Group review"
@@ -71,19 +72,17 @@ export default function Review() {
             <div className="review-summary">
               <div>
                 <strong>
-                  {s.n} / {target} closed trades
+                  {reviewed} / {s.n} closed trades reviewed
                 </strong>
                 <progress
-                  value={Math.min(s.n, target)}
-                  max={target}
-                  aria-label="Closed trades toward review milestone"
+                  value={reviewed}
+                  max={Math.max(1, s.n)}
+                  aria-label="Closed trades with reflection and plan review"
                 />
                 <p>
-                  {s.n >= 50
-                    ? "50-trade milestone reached. Read your notes alongside the numbers."
-                    : s.n >= 30
-                      ? "Initial review ready. Keep building toward 50 closed trades."
-                      : "Build your sample before drawing conclusions."}
+                  {s.n === 0
+                    ? "No trading target to reach. Reflect when you have a decision to review."
+                    : "A review includes a written reflection and whether you followed your plan. There is no trade-count target."}
                 </p>
               </div>
               <div>
@@ -138,7 +137,8 @@ export default function Review() {
                   {!groups.size && (
                     <tr>
                       <td colSpan={5}>
-                        Close your first trade to start comparing patterns.
+                        Closed-trade patterns appear here when records are
+                        available.
                       </td>
                     </tr>
                   )}

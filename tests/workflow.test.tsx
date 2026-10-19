@@ -32,6 +32,11 @@ beforeEach(() => {
   cloud.documents.clear();
   cloud.uid = "fictional-owner";
   cloud.failure = "";
+  cloud.documents.set(`users/${cloud.uid}/settings/onboarding`, {
+    version: 1,
+    step: 4,
+    status: "completed",
+  });
 });
 const base: Trade = {
   id: "a",
@@ -97,12 +102,10 @@ describe("React journaling workflow", () => {
     const signOut = vi
       .fn()
       .mockRejectedValue(Error("Could not reach sign-in service."));
-    const mock = vi
-      .spyOn(authMock, "useAuth")
-      .mockReturnValue({
-        user: { uid: cloud.uid, email: "fictional@example.invalid" },
-        signOut,
-      });
+    const mock = vi.spyOn(authMock, "useAuth").mockReturnValue({
+      user: { uid: cloud.uid, email: "fictional@example.invalid" },
+      signOut,
+    });
     try {
       app("/", [base]);
       const section = await screen.findByRole("region", {
@@ -290,35 +293,97 @@ describe("React journaling workflow", () => {
     await waitFor(() => expect(localStorage.getItem(KEY)).toBe("broken"));
     expect(storedTrades()).toEqual([]);
   });
-  it("deduplicates milestones across refresh and Strict Mode", async () => {
-    const nine = Array.from({ length: 9 }, (_, i) => ({
+  it("acknowledges a new written review once without rewarding trade count", async () => {
+    const view = app("/journal", [{ ...base, lesson: "", followed: "unsure" }]);
+    fireEvent.click(await screen.findByRole("button", { name: /Edit XAUUSD/ }));
+    const dialog = screen.getByRole("dialog");
+    change(
+      dialog,
+      "lesson",
+      "Waited for confirmation; next time check the session.",
+    );
+    change(dialog, "followed", "yes");
+    await submit(dialog);
+    expect(
+      screen.getByText(
+        "Reflection saved. Taking time to review your decisions matters.",
+      ),
+    ).toBeInTheDocument();
+    view.unmount();
+    app("/journal");
+    fireEvent.click(await screen.findByRole("button", { name: /Edit XAUUSD/ }));
+    await submit(screen.getByRole("dialog"));
+    expect(
+      screen.queryByText(
+        "Reflection saved. Taking time to review your decisions matters.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Your first 10 trades recorded."),
+    ).not.toBeInTheDocument();
+  });
+  it("does not celebrate ten trades or show trading targets in Review", async () => {
+    const nine = Array.from({ length: 9 }, (_, index) => ({
       ...base,
-      id: String(i),
+      id: String(index),
       followed: "unsure" as const,
     }));
     const view = app("/journal", nine);
     const dialog = await openNew();
     fill(dialog);
-    vi.useFakeTimers();
     await submit(dialog);
-    act(() => vi.advanceTimersByTime(2400));
-    expect(
-      screen.getByText("Your first 10 trades recorded."),
-    ).toBeInTheDocument();
-    act(() => vi.advanceTimersByTime(2200));
+    expect(storedTrades()).toHaveLength(10);
     expect(
       screen.queryByText("Your first 10 trades recorded."),
     ).not.toBeInTheDocument();
-    vi.useRealTimers();
     view.unmount();
-    app();
-    await screen.findByRole("heading", { name: /Trade journal/ });
+    app("/review");
     expect(
-      screen.queryByText("Your first 10 trades recorded."),
-    ).not.toBeInTheDocument();
-    expect(
-      JSON.parse(localStorage.getItem("trade-notes-milestones-v1")!),
-    ).toContain("ten");
+      await screen.findByText(/closed trades reviewed/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Keep building toward/)).not.toBeInTheDocument();
+  });
+  it("recognizes a completed daily reflection without a trading or attendance target", async () => {
+    app("/review");
+    fireEvent.change(await screen.findByLabelText("My focus before trading"), {
+      target: { value: "Be patient." },
+    });
+    vi.useFakeTimers();
+    try {
+      await act(async () =>
+        fireEvent.click(
+          screen.getByRole("button", { name: "Save reflection" }),
+        ),
+      );
+      const message =
+        "You recorded what worked and one adjustment. A useful moment of reflection.";
+      expect(screen.queryByText(message)).not.toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText("What went well?"), {
+        target: { value: "Waited for my setup." },
+      });
+      fireEvent.change(screen.getByLabelText("One thing for next time"), {
+        target: { value: "Check the session first." },
+      });
+      await act(async () =>
+        fireEvent.click(
+          screen.getByRole("button", { name: "Save reflection" }),
+        ),
+      );
+      expect(screen.getByText(message)).toBeInTheDocument();
+      act(() => vi.advanceTimersByTime(2300));
+      fireEvent.change(screen.getByLabelText("One thing for next time"), {
+        target: { value: "Check the session and my rules." },
+      });
+      await act(async () =>
+        fireEvent.click(
+          screen.getByRole("button", { name: "Save reflection" }),
+        ),
+      );
+      expect(screen.queryByText(message)).not.toBeInTheDocument();
+      expect(storedTrades()).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 describe("animation fallbacks", () => {

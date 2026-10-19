@@ -5,6 +5,7 @@ import { CloudJournalStore, TradesRepo, safeId } from "../app/lib/trades-repo";
 import { deviceSources, importDevice } from "../app/lib/device-import";
 import { KEY, type Trade } from "../app/lib/journal";
 import { emptyPractice } from "../app/lib/practice";
+import { onboardingRepo, parseTour } from "../app/lib/onboarding-repo";
 vi.mock(
   "firebase/firestore",
   async () => (await import("./cloud-fixture")).firestoreMock,
@@ -34,6 +35,36 @@ beforeEach(() => {
   cloud.documents.clear();
   cloud.uid = "fictional-owner";
   cloud.failure = "";
+});
+it("stores tour progress under its owner, resumes it and keeps journal metadata separate", async () => {
+  expect(await onboardingRepo.load(cloud.uid)).toBeNull();
+  await onboardingRepo.save(cloud.uid, {
+    version: 1,
+    step: 2,
+    status: "active",
+  });
+  expect(await onboardingRepo.load(cloud.uid)).toEqual({
+    version: 1,
+    step: 2,
+    status: "active",
+  });
+  await onboardingRepo.save(cloud.uid, {
+    version: 1,
+    step: 4,
+    status: "completed",
+  });
+  expect(
+    cloud.documents.get(`users/${cloud.uid}/settings/onboarding`),
+  ).toHaveProperty("completedAt");
+  expect(cloud.documents.has(`users/${cloud.uid}/settings/journal`)).toBe(
+    false,
+  );
+  cloud.uid = "different-owner";
+  expect(await onboardingRepo.load(cloud.uid)).toBeNull();
+  await expect(onboardingRepo.load("fictional-owner")).rejects.toThrow(
+    "account changed",
+  );
+  expect(() => parseTour({ version: 1, step: 5, status: "active" })).toThrow();
 });
 it("isolates account paths and preserves server creation timestamps on update", async () => {
   const store = new CloudJournalStore(new TradesRepo(cloud.uid));

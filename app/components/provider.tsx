@@ -1,11 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import {
-  milestones,
-  outcome,
-  planStreak,
-  type Milestone,
-  type Trade,
-} from "../lib/journal";
+import { type Trade } from "../lib/journal";
+import { hasTradeReview, hasDailyReview } from "../lib/review-progress";
 import { CloudJournalStore, TradesRepo } from "../lib/trades-repo";
 import { useAuth } from "./auth/AuthProvider";
 import { dataMessage } from "../lib/firebase-errors";
@@ -42,14 +37,6 @@ const Context = createContext<{
   ) => void | Promise<void>;
   notify: (message: string) => void;
 } | null>(null);
-const milestoneKey = "trade-notes-milestones-v1";
-function persistMilestones(seen: Set<Milestone>) {
-  try {
-    localStorage.setItem(milestoneKey, JSON.stringify([...seen]));
-  } catch {
-    /* Optional feedback metadata must never block a journal operation. */
-  }
-}
 export function JournalProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [deviceImportAvailable, setDeviceImportAvailable] = useState(false);
@@ -64,7 +51,6 @@ export function JournalProvider({ children }: { children: React.ReactNode }) {
       id: number;
     } | null>(null);
   const store = useRef<CloudJournalStore | null>(null),
-    seen = useRef(new Set<Milestone>()),
     timers = useRef<ReturnType<typeof setTimeout>[]>([]),
     serial = useRef(0);
   useEffect(() => {
@@ -82,8 +68,6 @@ export function JournalProvider({ children }: { children: React.ReactNode }) {
         setTrades(loaded);
         setPractice(instance.practice);
         setReady(true);
-        if (loaded.length >= 10) seen.current.add("ten");
-        if (planStreak(loaded) >= 5) seen.current.add("plan");
         try {
           setDeviceImportAvailable(deviceSources().length > 0);
         } catch {
@@ -123,7 +107,6 @@ export function JournalProvider({ children }: { children: React.ReactNode }) {
     drafts: Screenshot[] = [],
   ) {
     if (!store.current || !ready) throw Error("Journal is still loading.");
-    const before = store.current.trades;
     const previous = store.current.trades.find((t) => t.id === trade.id);
     if (
       drafts.length ||
@@ -139,33 +122,14 @@ export function JournalProvider({ children }: { children: React.ReactNode }) {
       setTrades(next);
       setError("");
       clearFeedback();
-      const events = milestones(before, next, seen.current);
-      for (const key of events) seen.current.add(key);
-      persistMilestones(seen.current);
-      const result = outcome(trade);
-      show(
-        result === "loss" ? "loss" : result === "win" ? "profit" : "success",
-        result === "loss"
-          ? "Loss recorded. Review your entry, risk and execution."
-          : "Trade saved. Your journal is up to date.",
-      );
-      if (events.length)
-        timers.current.push(
-          setTimeout(
-            () =>
-              show(
-                "milestone",
-                events
-                  .map((k) =>
-                    k === "ten"
-                      ? "Your first 10 trades recorded."
-                      : "Five consecutive closed trades following your plan: process consistency, regardless of profit or loss.",
-                  )
-                  .join(" "),
-              ),
-            2400,
-          ),
+      if (hasTradeReview(trade) && (!previous || !hasTradeReview(previous))) {
+        show(
+          "milestone",
+          "Reflection saved. Taking time to review your decisions matters.",
         );
+      } else {
+        show("success", "Trade saved. Your journal is up to date.");
+      }
     }
   }
   async function remove(id: string) {
@@ -208,9 +172,6 @@ export function JournalProvider({ children }: { children: React.ReactNode }) {
       setPractice(store.current!.practice);
       setError("");
       clearFeedback();
-      if (next.length >= 10) seen.current.add("ten");
-      if (planStreak(next) >= 5) seen.current.add("plan");
-      persistMilestones(seen.current);
       setMessage(`Restored ${next.length} trades.`);
     }
   }
@@ -223,8 +184,25 @@ export function JournalProvider({ children }: { children: React.ReactNode }) {
         practice,
         savePractice: async (next) => {
           if (!store.current || error) throw Error("Journal unavailable.");
+          const before = store.current.practice;
+          const addedReview = next.reflections.some(
+            (reflection) =>
+              hasDailyReview(reflection) &&
+              !hasDailyReview(
+                before.reflections.find(
+                  (previous) => previous.date === reflection.date,
+                ),
+              ),
+          );
           await store.current.commit(store.current.trades, false, next);
           setPractice(next);
+          if (addedReview) {
+            clearFeedback();
+            show(
+              "milestone",
+              "You recorded what worked and one adjustment. A useful moment of reflection.",
+            );
+          }
         },
         importTrades: async (next) => {
           if (!store.current || error) throw Error("Journal unavailable.");
