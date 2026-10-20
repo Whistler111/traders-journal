@@ -4,7 +4,19 @@ export const KEY = "trade-notes-v1";
 export const options = {
   direction: ["Long", "Short"],
   session: ["London", "New York", "Asia", "London / New York overlap", "Other"],
-  emotion: ["Calm", "Confident", "Anxious", "FOMO", "Frustrated"],
+  emotion: [
+    "Calm",
+    "Confident",
+    "Anxious",
+    "FOMO",
+    "Frustrated",
+    "calm",
+    "confident",
+    "anxious",
+    "impatient",
+    "revenge",
+    "fomo",
+  ],
   status: ["open", "closed"],
   followed: ["yes", "no", "unsure"],
 } as const;
@@ -24,6 +36,12 @@ export interface Trade {
   stop: number;
   risk: number;
   pnl: number | null;
+  volume?: number;
+  volumeUnit?: string;
+  closedAt?: string;
+  closePrice?: number;
+  followedPlan?: boolean;
+  rating?: number;
   screenshots?: ScreenshotRef[];
   journalReview?: TradeReview;
   [key: string]: unknown;
@@ -88,6 +106,35 @@ export function validate(value: unknown): Trade {
     );
   if (t.status === "open" && t.pnl !== null)
     throw Error("Open trades cannot include realized P&L.");
+  for (const key of ["volume", "closePrice"] as const)
+    if (
+      t[key] !== undefined &&
+      (typeof t[key] !== "number" || !Number.isFinite(t[key]) || t[key]! <= 0)
+    )
+      throw Error(`Invalid ${key}.`);
+  if (
+    t.volumeUnit !== undefined &&
+    (typeof t.volumeUnit !== "string" || t.volumeUnit.length > 40)
+  )
+    throw Error("Invalid volume unit.");
+  if (
+    t.closedAt !== undefined &&
+    (typeof t.closedAt !== "string" ||
+      t.closedAt.length > 40 ||
+      !Number.isFinite(+new Date(t.closedAt)) ||
+      +new Date(t.closedAt) <
+        +new Date(
+          typeof t.sourceTimestamp === "string" ? t.sourceTimestamp : t.date,
+        ))
+  )
+    throw Error("Close time must follow open time.");
+  if (t.followedPlan !== undefined && typeof t.followedPlan !== "boolean")
+    throw Error("Invalid plan adherence.");
+  if (
+    t.rating !== undefined &&
+    (!Number.isInteger(t.rating) || t.rating < 1 || t.rating > 5)
+  )
+    throw Error("Rating must be 1-5.");
   if (t.screenshots !== undefined) validateScreenshotRefs(t.screenshots);
   if (t.journalReview !== undefined) validateReview(t.journalReview);
   return t;
@@ -273,6 +320,13 @@ export function csv(trades: Trade[]) {
     "emotion",
     "reason",
     "lesson",
+    "closedAt",
+    "closePrice",
+    "volume",
+    "volumeUnit",
+    "followedPlan",
+    "rating",
+    "journalReview",
   ];
   const cell = (v: unknown) => {
     let text = String(v ?? "");
@@ -291,7 +345,13 @@ export function csv(trades: Trade[]) {
                 ? t.status === "closed"
                   ? t.pnl! / t.risk
                   : ""
-                : t[k],
+                : k === "date"
+                  ? t.sourceTimestamp || t.date
+                  : k === "journalReview"
+                    ? t.journalReview
+                      ? JSON.stringify(t.journalReview)
+                      : ""
+                    : t[k],
             ),
           )
           .join(","),

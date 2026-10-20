@@ -1,3 +1,4 @@
+import { WorkspaceSkeleton } from "../workspace-skeleton";
 import { createContext, useContext, useEffect, useState } from "react";
 import {
   GoogleAuthProvider,
@@ -15,6 +16,7 @@ import {
 import { Navigate, Outlet } from "react-router";
 import { firebaseClient } from "../../lib/firebase";
 import { authMessage } from "../../lib/firebase-errors";
+import { finishSignOut } from "../../lib/sign-out-cleanup";
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
@@ -24,12 +26,14 @@ interface AuthContextValue {
   signInWithEmail: (email: string, password: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
+  refreshVerification: () => Promise<boolean>;
 }
 const Context = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null),
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
+  const [, refresh] = useState(0);
   useEffect(() => {
     let unsubscribe = () => {},
       active = true;
@@ -80,7 +84,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             else throw e;
           }
         },
+        refreshVerification: async () => {
+          const current = firebaseClient().auth.currentUser;
+          if (!current) throw Error("Sign in again to check verification.");
+          await current.reload();
+          await current.getIdToken(true);
+          refresh((version) => version + 1);
+          return current.emailVerified;
+        },
         signUpWithEmail: async (email, password) => {
+          if (password.length < 8)
+            throw Error("Use at least 8 characters for your password.");
           const credential = await createUserWithEmailAndPassword(
             firebaseClient().auth,
             email.trim(),
@@ -102,19 +116,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           );
         },
         resetPassword: async (email) => {
-          await sendPasswordResetEmail(firebaseClient().auth, email.trim());
+          try {
+            await sendPasswordResetEmail(firebaseClient().auth, email.trim());
+          } catch (error) {
+            // Older projects without enumeration protection can reject missing users.
+            if (
+              ["auth/user-not-found", "auth/user-disabled"].includes(
+                (error as { code?: string }).code ?? "",
+              )
+            )
+              return;
+            throw error;
+          }
         },
         signOut: async () => {
           const auth = firebaseClient().auth;
-          const uid = auth.currentUser?.uid;
           await firebaseSignOut(auth);
-          // Alert delivery records can contain trade context; do not leave them for a later account.
-          if (uid)
-            try {
-              localStorage.removeItem(`trade-notes-alert-runtime-v1:${uid}`);
-            } catch {
-              /* Optional device metadata. */
-            }
+          await finishSignOut();
         },
       }}
     >
@@ -128,11 +146,7 @@ export function useAuth() {
   return value;
 }
 export function AuthLoading() {
-  return (
-    <div className="auth-loading" role="status">
-      Opening your trading space…
-    </div>
-  );
+  return <WorkspaceSkeleton full />;
 }
 export function RequireAuth() {
   const { user, loading } = useAuth();

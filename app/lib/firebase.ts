@@ -27,7 +27,9 @@ export function firebaseClient() {
     !config.appId
   )
     throw Error(
-      "Firebase is not configured. Check the host's public Firebase environment variables and rebuild.",
+      import.meta.env.DEV
+        ? "Firebase is not configured. Check the host's public Firebase environment variables and rebuild."
+        : "Sign-in is temporarily unavailable. Please try again later.",
     );
   const app = getApps().length ? getApp() : initializeApp(config);
   let auth;

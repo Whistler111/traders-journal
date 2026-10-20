@@ -6,3 +6,7 @@
 - `/lottie/`: decorative feedback animations; not logos or search-preview images.
 
 These small icons are not large Open Graph cover images. No photographic or social cover artwork was supplied, so the page does not advertise an enlarged favicon as a social cover or pretend it has a 180 px Apple touch icon. A dedicated high-resolution source would be needed for those assets.
+
+## Install icons
+
+`install-mark.svg` is a scalable static notebook-and-pencil rendition of the existing notebook mark. `icon-192.png` and `icon-512.png` are rendered from that vector for the PWA manifest and Apple touch icon. The original supplied favicons remain unchanged. Regenerate with `node scripts/create-pwa-icons.mjs` (installed Chrome is required). These install icons are not social-preview artwork.

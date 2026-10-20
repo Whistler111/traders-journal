@@ -1,3 +1,4 @@
+import { parseCsvFile } from "../lib/csv-file";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X, Upload } from "lucide-react";
 import { useJournal } from "./provider";
@@ -5,7 +6,6 @@ import {
   CSV_TEMPLATE,
   importFields,
   inferColumns,
-  parseCsv,
   previewCsv,
   type ColumnMap,
   type DateOrder,
@@ -31,7 +31,6 @@ export function CsvImport({
     [message, setMessage] = useState(""),
     [saving, setSaving] = useState(false),
     [usd, setUsd] = useState(false),
-    [includeDuplicates, setIncludeDuplicates] = useState(false),
     [selected, setSelected] = useState<Set<number> | null>(null);
   useEffect(() => {
     const el = ref.current!,
@@ -55,9 +54,7 @@ export function CsvImport({
       return { rows: [], error: (e as Error).message };
     }
   }, [rows, map, zone, order, trades]);
-  const valid = preview.rows.filter(
-      (r) => r.trade && (!r.duplicate || includeDuplicates),
-    ),
+  const valid = preview.rows.filter((r) => r.trade && !r.duplicate),
     chosen = valid.filter((r) => selected === null || selected.has(r.line));
   return (
     <dialog
@@ -97,13 +94,11 @@ export function CsvImport({
             setMessage("");
             setRows(null);
             setSelected(null);
-            setIncludeDuplicates(false);
             setUsd(false);
             const file = e.target.files?.[0];
             if (!file) return;
             try {
-              if (file.size > 2 * 1024 * 1024) throw Error("CSV exceeds 2 MB.");
-              const parsed = parseCsv(await file.text());
+              const parsed = await parseCsvFile(file);
               setMap(inferColumns(parsed[0]));
               setRows(parsed);
             } catch (error) {
@@ -180,17 +175,6 @@ export function CsvImport({
       </label>
       {rows && (
         <>
-          <label className="inline-check">
-            <input
-              type="checkbox"
-              checked={includeDuplicates}
-              onChange={(e) => {
-                setIncludeDuplicates(e.target.checked);
-                setSelected(null);
-              }}
-            />
-            Include flagged duplicates only if they represent separate trades
-          </label>
           <details>
             <summary>Match columns</summary>
             <div className="import-columns">
@@ -237,9 +221,14 @@ export function CsvImport({
             them in the file if those defaults do not apply.
           </div>
           <div className="import-rows" aria-label="CSV preview">
-            {preview.rows.map((r) => (
+            <p>
+              First 20 rows shown. {preview.rows.filter((r) => r.error).length}{" "}
+              errors; {preview.rows.filter((r) => r.duplicate).length}{" "}
+              duplicates excluded.
+            </p>
+            {preview.rows.slice(0, 20).map((r) => (
               <div key={r.line} className="import-row">
-                {r.trade && (!r.duplicate || includeDuplicates) ? (
+                {r.trade && !r.duplicate ? (
                   <label className="inline-check">
                     <input
                       type="checkbox"
@@ -289,7 +278,14 @@ export function CsvImport({
         </>
       )}
       {(message || preview.error) && (
-        <p className="error" role="alert">
+        <p
+          className={
+            /^\d+ imported/.test(message) && !preview.error
+              ? "import-summary"
+              : "error"
+          }
+          role="status"
+        >
           {message || preview.error}
         </p>
       )}
@@ -309,16 +305,12 @@ export function CsvImport({
           disabled={saving || !usd || !chosen.length || !!preview.error}
           onClick={async () => {
             try {
-              if (
-                chosen.some((r) => r.duplicate) &&
-                !confirm(
-                  "Some selected rows are flagged as duplicates. Import them as separate trades anyway?",
-                )
-              )
-                return;
               setSaving(true);
-              await importTrades(chosen.map((r) => r.trade!));
-              onClose();
+              const result = await importTrades(chosen.map((r) => r.trade!));
+              setRows(null);
+              setMessage(
+                `${result.imported} imported, ${result.skipped + preview.rows.filter((r) => r.duplicate).length} skipped, ${preview.rows.filter((r) => r.error).length} errors. Review other rows before importing them separately.`,
+              );
             } catch (e) {
               setMessage((e as Error).message);
             } finally {

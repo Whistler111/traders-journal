@@ -9,3 +9,8 @@ README.md
 .reference
 test-results
 playwright-report
+.security-tools
+.emulator-cache
+.browser-profile
+*-debug.log
+ui-debug.log

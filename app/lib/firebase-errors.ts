@@ -7,6 +7,25 @@ export function authMessage(error: unknown) {
     /^auth\/[a-z-]+$/.test(code)
   )
     console.warn(`[Trade Notes sign-in] ${code}`);
+  if (
+    !import.meta.env.DEV &&
+    typeof code === "string" &&
+    [
+      "auth/invalid-api-key",
+      "auth/api-key-not-valid.-please-pass-a-valid-api-key.",
+      "auth/configuration-not-found",
+      "auth/admin-restricted-operation",
+      "auth/app-not-authorized",
+      "auth/invalid-app-credential",
+      "auth/invalid-oauth-client-id",
+      "auth/invalid-oauth-provider",
+      "auth/unauthorized-client",
+      "auth/internal-error",
+      "auth/operation-not-allowed",
+      "auth/unauthorized-domain",
+    ].includes(code)
+  )
+    return "Sign-in is temporarily unavailable. Please try again later.";
   switch (code) {
     case "auth/invalid-api-key":
     case "auth/api-key-not-valid.-please-pass-a-valid-api-key.":
@@ -31,7 +50,7 @@ export function authMessage(error: unknown) {
     case "auth/user-not-found":
       return "The email or password is incorrect. Please try again.";
     case "auth/email-already-in-use":
-      return "This email already has an account. Sign in or reset your password.";
+      return "We couldn't create an account with these details. Try signing in or request a password reset.";
     case "auth/invalid-email":
       return "Enter a valid email address.";
     case "auth/weak-password":
@@ -45,9 +64,9 @@ export function authMessage(error: unknown) {
     case "auth/too-many-requests":
       return "Too many attempts. Please wait a little before trying again.";
     case "auth/user-disabled":
-      return "This account is disabled. Contact your account administrator.";
+      return "We couldn't complete sign-in with these details. Try again or request a password reset.";
     case "auth/account-exists-with-different-credential":
-      return "This email uses another sign-in method. Sign in using your original method.";
+      return "We couldn't complete sign-in. Try another sign-in method or request a password reset.";
     case "auth/operation-not-allowed":
       return "This sign-in method isn't enabled yet. Enable it in Firebase Authentication.";
     case "auth/unauthorized-domain":

@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { sendEmailVerification } from "firebase/auth";
 import { useAuth } from "../components/auth/AuthProvider";
 import { useJournal } from "../components/provider";
 import { authMessage } from "../lib/firebase-errors";
+import { VerificationBanner } from "../components/verification-banner";
 export function meta() {
   return [{ title: "Trade Notes - Account & connections" }];
 }
@@ -10,7 +10,6 @@ export default function Connections() {
   const { user, signOut } = useAuth();
   const { trades, deviceImportAvailable, importFromDevice } = useJournal();
   const [busy, setBusy] = useState(false),
-    [message, setMessage] = useState(""),
     [failure, setFailure] = useState("");
   async function run(work: () => Promise<void>) {
     setBusy(true);
@@ -47,24 +46,7 @@ export default function Connections() {
           save is confirmed only after the server accepts it. Download JSON
           backups for an independent copy.
         </p>
-        {user && !user.emailVerified && (
-          <div className="import-summary">
-            <p>
-              Please verify your email using the link sent when you signed up.
-            </p>
-            <button
-              disabled={busy}
-              onClick={() =>
-                void run(async () => {
-                  await sendEmailVerification(user);
-                  setMessage("Verification email sent. Check your inbox.");
-                })
-              }
-            >
-              Resend verification
-            </button>
-          </div>
-        )}
+        <VerificationBanner />
         <div className="sync-actions">
           {deviceImportAvailable && (
             <button disabled={busy} onClick={() => void run(importFromDevice)}>
@@ -80,7 +62,6 @@ export default function Connections() {
             {failure}
           </p>
         )}
-        {message && <p role="status">{message}</p>}
       </section>
       <section className="card" aria-label="Broker synchronization">
         <div className="section-heading">

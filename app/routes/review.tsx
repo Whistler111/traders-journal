@@ -1,3 +1,4 @@
+import { groupedMetrics, metrics } from "../lib/analytics";
 import { useState } from "react";
 import { hasTradeReview } from "../lib/review-progress";
 import { PracticeHub } from "../components/practice-hub";
@@ -42,11 +43,52 @@ export default function Review() {
       <div className="page-heading">
         <div>
           <p className="eyebrow">REFLECTION OVER REACTION</p>
-          <h1>Pattern review</h1>
+          <h1>Playbooks & review</h1>
           <p>Understand your process alongside your results.</p>
         </div>
       </div>
       <PracticeHub />
+      <section className="card">
+        <h2>Setup results</h2>
+        <p>
+          Discipline: {percent(metrics(trades).discipline)} of trades have a
+          fully completed, nonempty checklist.
+        </p>
+        <div className="table-wrap">
+          <table role="table">
+            <thead>
+              <tr>
+                {[
+                  "Setup",
+                  "Count",
+                  "Win rate",
+                  "Profit factor",
+                  "Average R",
+                  "Net P&L",
+                ].map((x) => (
+                  <th key={x}>{x}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {groupedMetrics(trades, (t) => t.setup).map((g) => (
+                <tr key={g.label}>
+                  <td data-label="Setup">{g.label}</td>
+                  <td data-label="Closed trades">{g.count}</td>
+                  <td data-label="Win rate">{percent(g.winRate)}</td>
+                  <td data-label="Profit factor">
+                    {g.noLosses
+                      ? "No losses"
+                      : (g.profitFactor?.toFixed(2) ?? "?")}
+                  </td>
+                  <td data-label="Average R">{rFormat(g.averageR)}</td>
+                  <td data-label="Net P&L">{g.net.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
       <section className="card">
         <div className="section-heading">
           <div>
@@ -100,7 +142,7 @@ export default function Review() {
               role="region"
               aria-label="Pattern comparison table"
             >
-              <table>
+              <table role="table">
                 <thead>
                   <tr>
                     {[
@@ -123,14 +165,14 @@ export default function Review() {
                       const s = stats(g.trades);
                       return (
                         <tr key={g.label}>
-                          <td>{g.label}</td>
-                          <td>
+                          <td data-label="Group">{g.label}</td>
+                          <td data-label="Closed trades">
                             {s.n}
                             {s.n < 10 && <small>Small sample</small>}
                           </td>
-                          <td>{percent(s.win)}</td>
-                          <td className={tone(s.total)}>{rFormat(s.total)}</td>
-                          <td className={tone(s.avg)}>{rFormat(s.avg)}</td>
+                          <td data-label="Win rate">{percent(s.win)}</td>
+                          <td data-label="Total R" className={tone(s.total)}>{rFormat(s.total)}</td>
+                          <td data-label="Average R" className={tone(s.avg)}>{rFormat(s.avg)}</td>
                         </tr>
                       );
                     })}

@@ -1,4 +1,4 @@
-import { validate, type Trade } from "./journal";
+import { unpackNotes, validate, type Trade } from "./journal";
 export const importFields = [
   "date",
   "symbol",
@@ -16,6 +16,13 @@ export const importFields = [
   "lesson",
   "sourceId",
   "currency",
+  "closedAt",
+  "closePrice",
+  "volume",
+  "volumeUnit",
+  "rating",
+  "followedPlan",
+  "journalReview",
 ] as const;
 export type ImportField = (typeof importFields)[number];
 export type ColumnMap = Record<ImportField, string>;
@@ -27,9 +34,13 @@ export interface CsvRow {
   error?: string;
 }
 export function parseCsv(input: string): string[][] {
-  if (input.length > 2 * 1024 * 1024)
-    throw Error("CSV exceeds 2 MB. Split it into smaller files.");
+  if (input.length > 5 * 1024 * 1024)
+    throw Error("CSV exceeds 5 MB. Split it into smaller files.");
   const text = input.replace(/^\uFEFF/, "");
+  const headerLine = text.split(/\r?\n/, 1)[0];
+  const delimiter = [",", ";", "\t"].sort(
+    (a, b) => headerLine.split(b).length - headerLine.split(a).length,
+  )[0];
   const rows: string[][] = [];
   let row: string[] = [],
     cell = "",
@@ -52,7 +63,7 @@ export function parseCsv(input: string): string[][] {
     if (c === '"') {
       if (cell || closed) throw Error("Unexpected quote in CSV.");
       quoted = true;
-    } else if (c === ",") {
+    } else if (c === delimiter) {
       row.push(cell);
       cell = "";
       closed = false;
@@ -90,14 +101,18 @@ export function parseCsv(input: string): string[][] {
 const aliases: Partial<Record<ImportField, string[]>> = {
   date: ["date", "datetime", "entrytime", "opentime", "openedat", "tradetime"],
   symbol: ["symbol", "asset", "pair", "instrument", "ticker"],
-  direction: ["direction", "side", "action"],
+  direction: ["direction", "side", "action", "type"],
   entry: ["entry", "entryprice", "openprice"],
   stop: ["stop", "stopprice", "stoploss", "initialstop"],
   risk: ["risk", "riskusd", "initialrisk", "amountrisked"],
   status: ["status", "tradestatus"],
-  pnl: ["pnl", "netpnl", "netprofit", "netprofitloss", "profitloss"],
+  pnl: ["profit", "pnl", "netpnl", "netprofit", "netprofitloss", "profitloss"],
   reason: ["reason", "entryreason", "notes"],
   sourceId: ["sourceid", "tradeid", "positionid", "id"],
+  closedAt: ["closetime", "closedat", "exittime"],
+  closePrice: ["closeprice", "exitprice"],
+  volume: ["volume", "lots", "size"],
+  volumeUnit: ["volumeunit", "sizeunit"],
   currency: ["currency", "accountcurrency"],
 };
 export function inferColumns(headers: string[]): ColumnMap {
@@ -105,8 +120,9 @@ export function inferColumns(headers: string[]): ColumnMap {
   return Object.fromEntries(
     importFields.map((field) => [
       field,
-      headers.find((h) => (aliases[field] ?? [field]).includes(normalize(h))) ??
-        "",
+      headers.find((h) =>
+        (aliases[field] ?? [normalize(field)]).includes(normalize(h)),
+      ) ?? "",
     ]),
   ) as ColumnMap;
 }
@@ -146,7 +162,7 @@ export function csvInstant(
   zone: string,
   order: DateOrder = "iso",
 ): Date {
-  let value = raw.trim();
+  let value = raw.trim().replace(/^(\d{4})\.(\d\d)\.(\d\d)/, "$1-$2-$3");
   if (order !== "iso") {
     const m = value.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})([ T].+)$/);
     if (!m) throw Error("Date does not match the selected day/month order.");
@@ -197,15 +213,19 @@ export function csvInstant(
   return new Date(candidates[0]);
 }
 export function tradeIdentity(t: Trade) {
+  const raw =
+    typeof t.sourceTimestamp === "string"
+      ? new Date(t.sourceTimestamp)
+      : new Date(t.date);
+  const instant = Number.isFinite(+raw)
+    ? raw.toISOString()
+    : new Date(t.date).toISOString();
+  const legacySize = Number.parseFloat(unpackNotes(t.lesson).size);
   return JSON.stringify([
-    t.date,
-    t.symbol.toUpperCase(),
-    t.direction,
+    t.symbol.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+    instant,
     t.entry,
-    t.stop,
-    t.risk,
-    t.status,
-    t.pnl,
+    t.volume ?? (Number.isFinite(legacySize) ? legacySize : null),
   ]);
 }
 function numeric(value: string) {
@@ -256,7 +276,8 @@ export function previewCsv(
       const direction = get("direction").toLowerCase();
       if (!["long", "short", "buy", "sell"].includes(direction))
         throw Error("Direction must be Buy/Long or Sell/Short.");
-      const rawStatus = get("status").toLowerCase();
+      const rawStatus =
+        get("status").toLowerCase() || (get("closedAt") ? "closed" : "");
       if (!["open", "closed"].includes(rawStatus))
         throw Error("Status must explicitly be open or closed.");
       const instant = csvInstant(get("date"), zone, order),
@@ -285,6 +306,32 @@ export function previewCsv(
         session: get("session") || "Other",
         emotion: get("emotion") || "Calm",
         followed: get("followed") || "unsure",
+        ...(get("rating") ? { rating: numeric(get("rating")) } : {}),
+        ...(get("followedPlan")
+          ? {
+              followedPlan:
+                get("followedPlan") === "true"
+                  ? true
+                  : get("followedPlan") === "false"
+                    ? false
+                    : get("followedPlan"),
+            }
+          : {}),
+        ...(get("journalReview")
+          ? { journalReview: JSON.parse(get("journalReview")) }
+          : {}),
+        ...(get("volume")
+          ? {
+              volume: numeric(get("volume")),
+              volumeUnit: get("volumeUnit") || "lot",
+            }
+          : {}),
+        ...(get("closePrice")
+          ? { closePrice: numeric(get("closePrice")) }
+          : {}),
+        ...(get("closedAt")
+          ? { closedAt: csvInstant(get("closedAt"), zone, order).toISOString() }
+          : {}),
         sourceTimestamp: instant.toISOString(),
         importTimestamp: new Date().toISOString(),
         ...(sourceId ? { importSourceId: sourceId } : {}),
@@ -303,4 +350,4 @@ export function previewCsv(
   });
 }
 export const CSV_TEMPLATE =
-  "date,symbol,direction,entry,stop,risk,status,pnl,reason,currency,sourceId\r\n";
+  "open time,close time,symbol,type,volume,open price,close price,profit,stop,risk,reason,currency,sourceId\r\n";

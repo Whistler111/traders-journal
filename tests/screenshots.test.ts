@@ -9,7 +9,7 @@ import {
   restoreWithScreenshots,
   type Screenshot,
 } from "../app/lib/screenshots";
-import { validateScreenshot } from "../app/lib/image-model";
+import { safeScreenshotName, validateScreenshot } from "../app/lib/image-model";
 import { JournalStore } from "./helpers/legacy-journal-store";
 import { KEY, validate, type Trade } from "../app/lib/journal";
 const pixel =
@@ -130,7 +130,11 @@ it("rejects invalid file types, oversized files, invalid image payloads and exce
       new File(["svg"], "chart.svg", { type: "image/svg+xml" }),
     ),
   ).rejects.toThrow(/PNG, JPG or WebP/);
-  const large = new File(["png"], "chart.png", { type: "image/png" });
+  const large = new File(
+    [Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10])],
+    "chart.png",
+    { type: "image/png" },
+  );
   Object.defineProperty(large, "size", { value: 11 * 1024 * 1024 });
   await expect(prepareScreenshot(large)).rejects.toThrow(/10 MB/);
   expect(() =>
@@ -178,4 +182,60 @@ it("does not save a trade if IndexedDB is unavailable", async () => {
     ]),
   ).rejects.toThrow(/unavailable/);
   expect(localStorage.getItem(KEY)).toBeNull();
+});
+
+it("falls back to JPEG when WebP encoding returns an oversized PNG", async () => {
+  vi.stubGlobal(
+    "Image",
+    class {
+      naturalWidth = 100;
+      naturalHeight = 100;
+      src = "";
+      decode() {
+        return Promise.resolve();
+      }
+    },
+  );
+  vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:fictional");
+  vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+    fillRect() {},
+    drawImage() {},
+  } as unknown as CanvasRenderingContext2D);
+  const encode = vi
+    .spyOn(HTMLCanvasElement.prototype, "toBlob")
+    .mockImplementation((callback, type) => {
+      callback(
+        new Blob(
+          [type === "image/webp" ? new Uint8Array(600 * 1024) : "jpeg"],
+          { type: type === "image/webp" ? "image/png" : "image/jpeg" },
+        ),
+      );
+    });
+  const result = await prepareScreenshot(
+    new File(
+      [Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10])],
+      "chart.png",
+      { type: "image/png" },
+    ),
+  );
+  expect(result.dataUrl).toMatch(/^data:image\/jpeg;base64,/);
+  expect(encode.mock.calls.map((call) => call[1])).toEqual([
+    "image/webp",
+    "image/jpeg",
+  ]);
+});
+
+it("rejects spoofed image MIME types before decoding or creating a preview", async () => {
+  await expect(
+    prepareScreenshot(
+      new File(["<svg onload=alert(1)>"], "image.png", { type: "image/png" }),
+    ),
+  ).rejects.toThrow("does not match");
+});
+it("strips paths, control characters, bidi overrides and unsafe filename characters", () => {
+  expect(safeScreenshotName("../../chart<>:?.png")).toBe("chart.png");
+  expect(safeScreenshotName("C:\\private\\chart.png")).toBe("chart.png");
+  expect(safeScreenshotName("chart\u202e\u0000.png")).toBe("chart.png");
+  expect(safeScreenshotName("..")).toBe("Screenshot");
 });

@@ -1,5 +1,11 @@
 import {
   collection,
+  query,
+  where,
+  orderBy,
+  limit,
+  startAfter,
+  type QueryDocumentSnapshot,
   doc,
   getDocFromServer,
   getDocsFromServer,
@@ -17,6 +23,7 @@ import {
   type ScreenshotRef,
 } from "./image-model";
 import { dataMessage } from "./firebase-errors";
+import { requireVerifiedAccount } from "./account-security";
 export function safeId(id: string) {
   if (
     !id ||
@@ -49,14 +56,32 @@ export class TradesRepo {
   private meta() {
     return this.path("settings", "journal");
   }
-  async list() {
+  async list(range?: { from: string; to: string }) {
     this.requireOwner();
     // Compare revision around the query to avoid a torn collection snapshot.
     for (let attempt = 0; attempt < 3; attempt++) {
       const before = await getDocFromServer(this.meta());
-      const records = await getDocsFromServer(
-        collection(this.db, "users", this.uid, "trades"),
-      );
+      const docs: QueryDocumentSnapshot[] = [];
+      let cursor: QueryDocumentSnapshot | undefined;
+      do {
+        const page = await getDocsFromServer(
+          query(
+            collection(this.db, "users", this.uid, "trades"),
+            ...(range
+              ? [
+                  where("date", ">=", range.from + "T00:00"),
+                  where("date", "<=", range.to + "T23:59"),
+                ]
+              : []),
+            orderBy("date"),
+            limit(200),
+            ...(cursor ? [startAfter(cursor)] : []),
+          ),
+        );
+        docs.push(...page.docs);
+        cursor = page.docs.length === 200 ? page.docs.at(-1) : undefined;
+      } while (cursor);
+      const records = { docs };
       const after = await getDocFromServer(this.meta());
       if ((before.data()?.revision ?? 0) !== (after.data()?.revision ?? 0))
         continue;
@@ -83,6 +108,7 @@ export class TradesRepo {
     fingerprint?: string,
   ) {
     this.requireOwner();
+    requireVerifiedAccount(firebaseClient().auth.currentUser);
     parseBackup({ version: 1, trades: next });
     validatePractice(practice);
     const prior = new Map(before.map((t) => [t.id, t])),
@@ -180,6 +206,8 @@ export class TradesRepo {
     return images;
   }
   async writeImages(images: Screenshot[]) {
+    this.requireOwner();
+    requireVerifiedAccount(firebaseClient().auth.currentUser);
     for (const image of images) {
       this.requireOwner();
       validateScreenshot(image);
@@ -203,6 +231,7 @@ export class TradesRepo {
   }
   async deleteImages(ids: string[]) {
     this.requireOwner();
+    requireVerifiedAccount(firebaseClient().auth.currentUser);
     await Promise.all(ids.map((id) => deleteDoc(this.path("images", id))));
   }
 }
@@ -213,9 +242,9 @@ export class CloudJournalStore {
   revision = 0;
   failed = false;
   constructor(readonly repo: TradesRepo) {}
-  async load() {
+  async load(range?: { from: string; to: string }) {
     try {
-      const state = await this.repo.list();
+      const state = await this.repo.list(range);
       this.trades = state.trades;
       this.practice = state.practice;
       this.revision = state.revision;
@@ -257,7 +286,13 @@ export class CloudJournalStore {
     if (!editing && existing) throw Error("This trade has already been saved.");
     return this.commit(
       editing
-        ? this.trades.map((t) => (t.id === trade.id ? { ...t, ...trade } : t))
+        ? this.trades.map((t) => {
+            if (t.id !== trade.id) return t;
+            const merged = { ...t, ...trade };
+            for (const key of ["rating", "followedPlan", "closedAt"] as const)
+              if (!(key in trade)) delete merged[key];
+            return merged;
+          })
         : [...this.trades, trade],
     );
   }

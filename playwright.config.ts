@@ -1,11 +1,13 @@
 import { defineConfig, devices } from "@playwright/test";
+const port = process.env.JOURNAL_TEST_PORT ?? "4173";
+const baseURL = `http://127.0.0.1:${port}`;
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
   workers: 1,
   timeout: 30000,
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    baseURL,
     launchOptions: {
       executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe",
     },
@@ -32,8 +34,8 @@ export default defineConfig({
   webServer: {
     command:
       "node node_modules/@react-router/serve/bin.cjs build/server/index.js",
-    env: { PORT: "4173", HOST: "127.0.0.1" },
-    url: "http://127.0.0.1:4173",
+    env: { PORT: port, HOST: "127.0.0.1" },
+    url: baseURL,
     reuseExistingServer: false,
     timeout: 30000,
   },

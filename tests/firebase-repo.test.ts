@@ -35,6 +35,7 @@ beforeEach(() => {
   cloud.documents.clear();
   cloud.uid = "fictional-owner";
   cloud.failure = "";
+  cloud.verified = true;
 });
 it("stores tour progress under its owner, resumes it and keeps journal metadata separate", async () => {
   expect(await onboardingRepo.load(cloud.uid)).toBeNull();
@@ -117,6 +118,7 @@ it("imports local and session records explicitly, marks once, and only clears af
   expect(deviceSources()).toHaveLength(2);
   expect(storedTrades()).toEqual([]);
   cloud.failure = "";
+  cloud.verified = true;
   expect(await importDevice(store, sources)).toBe(2);
   expect(deviceSources()).toEqual([]);
   expect(storedTrades()).toHaveLength(2);
@@ -158,4 +160,33 @@ it("keeps owner-only rules and rejects IDs that could escape a document path", (
   expect(rules).toContain("request.auth != null && request.auth.uid == uid");
   expect(rules).not.toContain("allow read, write: if true");
   expect(() => safeId("../other")).toThrow();
+});
+
+it("blocks unverified saves and image uploads before any writes", async () => {
+  cloud.verified = false;
+  const store = new CloudJournalStore(new TradesRepo(cloud.uid));
+  await store.load();
+  await expect(store.save(trade, false)).rejects.toThrow("Verify your email");
+  await expect(
+    store.repo.writeImages([
+      { id: "x", name: "x.png", dataUrl: "data:image/png;base64,YQ==" },
+    ]),
+  ).rejects.toThrow("Verify your email");
+  expect(cloud.documents.size).toBe(0);
+});
+it("paginates a selected range and edits without deleting records outside it", async () => {
+  const rows = Array.from({ length: 405 }, (_, i) => ({
+    ...trade,
+    id: `page-${String(i).padStart(3, "0")}`,
+  }));
+  seedTrades([...rows, { ...trade, id: "outside", date: "2024-01-01T10:00" }]);
+  const store = new CloudJournalStore(new TradesRepo(cloud.uid));
+  expect(
+    await store.load({ from: "2026-10-01", to: "2026-10-31" }),
+  ).toHaveLength(405);
+  await store.save({ ...rows[0], lesson: "Reviewed" }, true);
+  expect(storedTrades()).toHaveLength(406);
+  expect(storedTrades().find((t) => t.id === "outside")?.date).toBe(
+    "2024-01-01T10:00",
+  );
 });

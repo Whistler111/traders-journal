@@ -1,3 +1,4 @@
+import { PwaRegistration } from "./components/pwa-registration";
 import {
   isRouteErrorResponse,
   Links,
@@ -12,9 +13,12 @@ import type { Route } from "./+types/root";
 import "./app.css";
 import "./ui.css";
 import "./features.css";
+import "./dashboard.css";
 import { AuthProvider } from "./components/auth/AuthProvider";
 
 export const links: Route.LinksFunction = () => [
+  { rel: "manifest", href: "/manifest.webmanifest" },
+  { rel: "apple-touch-icon", href: "/brand/icon-192.png" },
   {
     rel: "icon",
     href: "/favicon.ico",
@@ -51,7 +55,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, viewport-fit=cover"
+        />
+        <meta name="theme-color" content="#6159ba" />
         <meta name="application-name" content="Trade Notes" />
         <meta property="og:site_name" content="Trade Notes" />
         <meta
@@ -60,11 +68,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             pathname === "/about" ? "index, follow" : "noindex, nofollow"
           }
         />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem('trade-notes-theme-v1');document.documentElement.dataset.theme=t==='dark'||t==='light'?t:matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}catch{document.documentElement.dataset.theme=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}`,
-          }}
-        />
+        <script src="/theme.js" />
         <Meta />
         <Links />
       </head>
@@ -80,6 +84,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <AuthProvider>
+      <PwaRegistration />
       <Outlet />
     </AuthProvider>
   );

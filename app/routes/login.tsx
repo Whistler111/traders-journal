@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, Navigate } from "react-router";
-import { BookOpen, LockKeyhole } from "lucide-react";
+import { BookOpen, LockKeyhole, Eye, EyeOff } from "lucide-react";
 import { AuthHero } from "../components/auth/AuthHero";
 import { AuthLoading, useAuth } from "../components/auth/AuthProvider";
 import { authMessage } from "../lib/firebase-errors";
@@ -14,6 +14,7 @@ export default function Login() {
   const [mode, setMode] = useState<"signin" | "signup" | "reset">("signin"),
     [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
+    [showPassword, setShowPassword] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [message, setMessage] = useState("");
@@ -35,6 +36,7 @@ export default function Login() {
   }
   function changeMode(next: typeof mode) {
     setMode(next);
+    setShowPassword(false);
     setError("");
     setMessage("");
     setPassword("");
@@ -86,8 +88,24 @@ export default function Login() {
             </button>
           )}
           <form
+            noValidate
             onSubmit={(e) => {
               e.preventDefault();
+              if (
+                !e.currentTarget.checkValidity() ||
+                (mode === "signup" && password.length < 8)
+              ) {
+                setError(
+                  !e.currentTarget.elements.namedItem("email") || !email.trim()
+                    ? "Enter your email address."
+                    : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+                      ? "Enter a valid email address."
+                      : mode === "signup" && password.length < 8
+                        ? "Use at least 8 characters for your password."
+                        : "Enter your password.",
+                );
+                return;
+              }
               void run(async () => {
                 if (mode === "reset") {
                   await auth.resetPassword(email);
@@ -120,22 +138,53 @@ export default function Login() {
             {mode !== "reset" && (
               <>
                 <label htmlFor="auth-password">Password</label>
-                <input
-                  id="auth-password"
-                  name="password"
-                  type="password"
-                  inputMode="text"
-                  autoComplete={
-                    mode === "signup" ? "new-password" : "current-password"
-                  }
-                  required
-                  minLength={mode === "signup" ? 8 : undefined}
-                  maxLength={512}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={busy}
-                />
+                <div className="auth-password-field">
+                  <input
+                    id="auth-password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    inputMode="text"
+                    autoComplete={
+                      mode === "signup" ? "new-password" : "current-password"
+                    }
+                    required
+                    minLength={mode === "signup" ? 8 : undefined}
+                    maxLength={512}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={busy}
+                    aria-describedby={
+                      mode === "signup" ? "password-hint" : undefined
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="auth-password-toggle"
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
+                    aria-pressed={showPassword}
+                    aria-controls="auth-password"
+                    onClick={() => setShowPassword((shown) => !shown)}
+                  >
+                    {showPassword ? (
+                      <EyeOff size={20} aria-hidden="true" />
+                    ) : (
+                      <Eye size={20} aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
+                {mode === "signup" && (
+                  <p id="password-hint" className="auth-password-hint">
+                    Use at least 8 characters.
+                  </p>
+                )}
               </>
+            )}
+            {(error || auth.error) && (
+              <p role="alert" className="error auth-error">
+                {error || auth.error}
+              </p>
             )}
             <button
               type="submit"
@@ -151,11 +200,7 @@ export default function Login() {
                     : "Sign in"}
             </button>
           </form>
-          {(error || auth.error) && (
-            <p role="alert" className="error">
-              {error || auth.error}
-            </p>
-          )}
+
           {message && <p role="status">{message}</p>}
           <div className="auth-mode-actions">
             {mode === "signin" ? (

@@ -1,3 +1,4 @@
+import { validateRisk, type RiskRules } from "./risk-config";
 export interface Playbook {
   id: string;
   name: string;
@@ -12,6 +13,8 @@ export interface DailyReflection {
   improve: string;
 }
 export interface Practice {
+  timezone?: string;
+  riskRules?: RiskRules;
   playbooks: Playbook[];
   reflections: DailyReflection[];
 }
@@ -72,6 +75,12 @@ export function validatePractice(value: unknown): Practice {
   if (!value || typeof value !== "object")
     throw Error("Invalid playbooks or reflections.");
   const data = value as Practice;
+  if (data.timezone !== undefined) {
+    if (typeof data.timezone !== "string" || data.timezone.length > 100)
+      throw Error("Invalid timezone.");
+    new Intl.DateTimeFormat("en", { timeZone: data.timezone }).format();
+  }
+  if (data.riskRules !== undefined) validateRisk(data.riskRules);
   if (
     !Array.isArray(data.playbooks) ||
     data.playbooks.length > 200 ||

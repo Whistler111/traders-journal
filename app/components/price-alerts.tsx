@@ -27,7 +27,9 @@ export function PriceAlerts({
   const SETTINGS_KEY = `trade-notes-alert-settings-v1:${user!.uid}`,
     RUNTIME_KEY = `trade-notes-alert-runtime-v1:${user!.uid}`,
     LEASE_KEY = `trade-notes-alert-leader-v1:${user!.uid}`;
-  const { trades, ready } = useJournal();
+  const { trades: filteredTrades, loadedTrades, ready } = useJournal();
+  // Display filters must not silence monitoring for other loaded open trades.
+  const trades=loadedTrades ?? filteredTrades;
   const [settings, setSettings] = useState<AlertSettings>(DEFAULT_SETTINGS),
     [loaded, setLoaded] = useState(false),
     [runtime, setRuntime] = useState<AlertRuntime>({

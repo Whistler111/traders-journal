@@ -49,6 +49,15 @@ export function TradeForm({
     lesson: "",
     exit: "",
     size: "",
+    rating: "",
+    closedAt: trade?.closedAt
+      ? new Date(
+          +new Date(trade.closedAt) -
+            new Date(trade.closedAt).getTimezoneOffset() * 60000,
+        )
+          .toISOString()
+          .slice(0, 16)
+      : "",
     ...Object.fromEntries(
       Object.entries(trade ?? {})
         .filter(([, v]) => typeof v === "string" || typeof v === "number")
@@ -56,6 +65,14 @@ export function TradeForm({
     ),
     ...(trade
       ? {
+          closedAt: trade.closedAt
+            ? new Date(
+                +new Date(trade.closedAt) -
+                  new Date(trade.closedAt).getTimezoneOffset() * 60000,
+              )
+                .toISOString()
+                .slice(0, 16)
+            : "",
           lesson: unpackNotes(trade.lesson).notes,
           exit: unpackNotes(trade.lesson).exit,
           size: unpackNotes(trade.lesson).size,
@@ -81,9 +98,22 @@ export function TradeForm({
     const el = dialog.current!;
     const previous = document.activeElement;
     el.showModal();
+    const viewport = window.visualViewport;
+    const resize = () => {
+      el.style.setProperty(
+        "--sheet-height",
+        `${viewport?.height ?? window.innerHeight}px`,
+      );
+      el.style.setProperty("--sheet-top", `${viewport?.offsetTop ?? 0}px`);
+    };
+    resize();
+    viewport?.addEventListener("resize", resize);
+    viewport?.addEventListener("scroll", resize);
     const old = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
+      viewport?.removeEventListener("resize", resize);
+      viewport?.removeEventListener("scroll", resize);
       el.close();
       document.body.style.overflow = old;
       if (previous instanceof HTMLElement) previous.focus();
@@ -202,10 +232,20 @@ export function TradeForm({
         stop: values.stop.trim() ? Number(values.stop) : NaN,
         risk: values.risk.trim() ? Number(values.risk) : NaN,
         date: values.date,
+        ...(!trade || trade.date !== values.date
+          ? { sourceTimestamp: new Date(values.date).toISOString() }
+          : {}),
+        ...(values.closedAt && values.status === "closed"
+          ? { closedAt: new Date(values.closedAt).toISOString() }
+          : { closedAt: undefined }),
         setup: values.setup.trim(),
         session: values.session,
         emotion: values.emotion,
         followed: values.followed,
+        ...(values.followed !== "unsure"
+          ? { followedPlan: values.followed === "yes" }
+          : {}),
+        ...(values.rating ? { rating: Number(values.rating) } : {}),
         ...(review.playbookId || review.mistakes.length || trade?.journalReview
           ? { journalReview: review }
           : {}),
@@ -222,6 +262,9 @@ export function TradeForm({
           record.lesson = trade.lesson;
       }
       if (images.length || trade?.screenshots) record.screenshots = images;
+      if (values.followed === "unsure") delete record.followedPlan;
+      if (!values.rating) delete record.rating;
+      if (!values.closedAt || values.status === "open") delete record.closedAt;
       const pending = save(record, !!trade, drafts);
       if (pending) {
         setSaving(true);
@@ -357,14 +400,37 @@ export function TradeForm({
             {input("stop", "Initial stop price", "number", true)}
             {input("risk", "Amount risked (USD)", "number", true)}
             {input("date", "Trade date & time", "datetime-local", true)}
+            {values.status === "closed" &&
+              input(
+                "closedAt",
+                "Close date & time (optional, device local)",
+                "datetime-local",
+              )}
             {input("setup", "Setup", "text", true, 100)}
             {select("session", "Session")}
             {select("emotion", "Emotion")}
             {select("followed", "Followed your plan?")}
+            <label>
+              Rating (optional)
+              <select
+                value={values.rating}
+                onChange={(e) => change("rating", e.target.value)}
+              >
+                <option value="">Unrated</option>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
           </fieldset>
           <TradeReviewFields
             value={review}
-            onChange={setReview}
+            onChange={(next) => {
+              setReview(next);
+              if (next.playbookName) change("setup", next.playbookName);
+            }}
             disabled={saving || processing}
           />
         </details>
@@ -377,7 +443,7 @@ export function TradeForm({
           {trade ? (
             <button
               type="button"
-              className="text-button"
+              className="text-button delete-trade"
               disabled={saving || processing}
               onClick={async () => {
                 if (confirm("Delete this trade? This cannot be undone."))

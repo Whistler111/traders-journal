@@ -43,6 +43,15 @@ export async function importDevice(
   store: CloudJournalStore,
   sources: DeviceSource[],
 ) {
+  // Explicit device import needs all IDs to detect conflicts beyond the active range.
+  const priorRevision = store.revision;
+  await store.load();
+  if (store.revision !== priorRevision) {
+    store.failed = true;
+    throw Error(
+      "Your journal changed on another device. Reload before importing.",
+    );
+  }
   let trades: Trade[] = [],
     practice: Practice = emptyPractice();
   for (const { raw } of sources) {
@@ -71,6 +80,7 @@ export async function importDevice(
   }
   const nextTrades = mergeById(store.trades, trades, (t) => t.id);
   const nextPractice = {
+    ...store.practice,
     playbooks: mergeById(
       store.practice.playbooks,
       practice.playbooks,

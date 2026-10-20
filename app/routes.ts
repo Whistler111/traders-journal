@@ -16,6 +16,8 @@ export default [
       index("routes/home.tsx"),
       route("overview", "routes/home.tsx", { id: "overview" }),
       route("journal", "routes/journal.tsx"),
+      route("reports", "routes/reports.tsx"),
+      route("settings", "routes/settings.tsx"),
       route("review", "routes/review.tsx"),
       route("connections", "routes/connections.tsx"),
     ]),

@@ -162,3 +162,62 @@ it("explains Firebase project and OAuth configuration failures", () => {
     "OAuth configuration",
   );
 });
+
+it("toggles passwords and shows short-password and rejected-signup errors", async () => {
+  app();
+  await act(async () => changed(null));
+  fireEvent.click(screen.getByRole("button", { name: "Show password" }));
+  expect(screen.getByLabelText("Password")).toHaveAttribute("type", "text");
+  fireEvent.click(screen.getByRole("button", { name: "Hide password" }));
+  expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
+  fireEvent.click(screen.getByRole("button", { name: "Create an account" }));
+  fireEvent.change(screen.getByLabelText("Email address"), {
+    target: { value: "fictional@example.invalid" },
+  });
+  fireEvent.change(screen.getByLabelText("Password"), {
+    target: { value: "short" },
+  });
+  fireEvent.submit(
+    screen.getByRole("button", { name: "Create account" }).closest("form")!,
+  );
+  expect(screen.getByRole("alert")).toHaveTextContent("at least 8 characters");
+  expect(sdk.signup).not.toHaveBeenCalled();
+  sdk.signup.mockRejectedValueOnce({ code: "auth/email-already-in-use" });
+  fireEvent.change(screen.getByLabelText("Password"), {
+    target: { value: "fictional-password" },
+  });
+  fireEvent.submit(
+    screen.getByRole("button", { name: "Create account" }).closest("form")!,
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "couldn't create an account",
+  );
+});
+
+it("keeps missing-user reset responses neutral", async () => {
+  app();
+  await act(async () => changed(null));
+  fireEvent.click(screen.getByRole("button", { name: "Forgot password?" }));
+  fireEvent.change(screen.getByLabelText("Email address"), {
+    target: { value: "fictional@example.invalid" },
+  });
+  sdk.reset.mockRejectedValueOnce({ code: "auth/user-not-found" });
+  fireEvent.click(screen.getByRole("button", { name: "Send reset link" }));
+  expect(await screen.findByRole("status")).toHaveTextContent(
+    "If an account exists",
+  );
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+it("keeps production configuration failures friendly and does not log diagnostic codes", () => {
+  vi.stubEnv("DEV", false);
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    expect(authMessage({ code: "auth/invalid-api-key" })).toBe(
+      "Sign-in is temporarily unavailable. Please try again later.",
+    );
+    expect(warn).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});

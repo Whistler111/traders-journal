@@ -5,6 +5,8 @@ export default ts.config(
   {
     ignores: [
       "node_modules/**",
+      ".security-tools/**",
+      ".emulator-cache/**",
       "build/**",
       ".react-router/**",
       ".reference/**",

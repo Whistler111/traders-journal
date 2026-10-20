@@ -11,7 +11,7 @@ import { download } from "../lib/download";
 import { useAuth } from "./auth/AuthProvider";
 export function ManageData() {
   const { signOut } = useAuth();
-  const { trades, practice, ready, error, restore, notify } = useJournal(),
+  const { trades, store, ready, error, restore, notify } = useJournal(),
     file = useRef<HTMLInputElement>(null),
     [loading, setLoading] = useState(false);
   const menu = useRef<HTMLDetailsElement>(null),
@@ -43,9 +43,13 @@ export function ManageData() {
             onClick={async () => {
               setLoading(true);
               try {
+                const full = await store.current!.repo.list();
                 download(
                   JSON.stringify(
-                    { ...(await exportWithScreenshots(trades)), practice },
+                    {
+                      ...(await exportWithScreenshots(full.trades)),
+                      practice: full.practice,
+                    },
                     null,
                     2,
                   ),

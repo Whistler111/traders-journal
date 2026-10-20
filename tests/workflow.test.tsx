@@ -103,7 +103,12 @@ describe("React journaling workflow", () => {
       .fn()
       .mockRejectedValue(Error("Could not reach sign-in service."));
     const mock = vi.spyOn(authMock, "useAuth").mockReturnValue({
-      user: { uid: cloud.uid, email: "fictional@example.invalid" },
+      user: {
+        uid: cloud.uid,
+        email: "fictional@example.invalid",
+        emailVerified: true,
+        providerData: [],
+      },
       signOut,
     });
     try {
@@ -248,10 +253,10 @@ describe("React journaling workflow", () => {
   ])("renders route %s", async (path) => {
     app(path);
     const name = path.includes("review")
-      ? "Pattern review"
+      ? "Playbooks & review"
       : path.includes("journal")
         ? "Trade journal"
-        : "Make every trade a lesson.";
+        : "Dashboard";
     expect(
       await screen.findByRole("heading", { name: new RegExp(name) }),
     ).toBeInTheDocument();

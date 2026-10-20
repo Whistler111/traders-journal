@@ -2,6 +2,7 @@ import { backup, parseBackup, type Trade } from "./journal";
 import { validatePractice, type Practice } from "./practice";
 import {
   MAX_IMAGE_BYTES as MAX_BYTES,
+  safeScreenshotName,
   validateScreenshot,
   type Screenshot,
   type ScreenshotRef,
@@ -280,11 +281,34 @@ function dataUrl(file: Blob): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+async function validateImageHeader(file: File) {
+  const bytes = await new Promise<Uint8Array>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+    reader.onerror = () => reject(Error("Could not read this image."));
+    reader.readAsArrayBuffer(file.slice(0, 12));
+  });
+  const prefix = (...signature: number[]) =>
+    signature.every((byte, index) => bytes[index] === byte);
+  const valid =
+    file.type === "image/png"
+      ? prefix(137, 80, 78, 71, 13, 10, 26, 10)
+      : file.type === "image/jpeg"
+        ? prefix(255, 216, 255)
+        : prefix(82, 73, 70, 70) &&
+          bytes[8] === 87 &&
+          bytes[9] === 69 &&
+          bytes[10] === 66 &&
+          bytes[11] === 80;
+  if (!valid)
+    throw Error("This file does not match its PNG, JPG or WebP image type.");
+}
 export async function prepareScreenshot(file: File): Promise<Screenshot> {
   if (!["image/png", "image/jpeg", "image/webp"].includes(file.type))
     throw Error("Choose a PNG, JPG or WebP image.");
   if (file.size > 10 * 1024 * 1024)
     throw Error("Choose an image smaller than 10 MB.");
+  await validateImageHeader(file);
   const url = URL.createObjectURL(file);
   try {
     const image = new Image();
@@ -315,22 +339,22 @@ export async function prepareScreenshot(file: File): Promise<Screenshot> {
       context.fillStyle = "#ffffff";
       context.fillRect(0, 0, canvas.width, canvas.height);
       context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      for (const quality of [0.9, 0.8, 0.65, 0.5]) {
-        blob = await new Promise<Blob>((resolve, reject) =>
-          canvas.toBlob(
-            (result) =>
-              result
-                ? resolve(result)
-                : reject(Error("Could not resize this image.")),
-            "image/webp",
-            quality,
-          ),
-        );
-        if (blob.type !== "image/webp")
-          throw Error(
-            "This browser cannot encode WebP images. Try a current browser.",
+      formats: for (const format of ["image/webp", "image/jpeg"]) {
+        for (const quality of [0.9, 0.8, 0.65, 0.5]) {
+          blob = await new Promise<Blob>((resolve, reject) =>
+            canvas.toBlob(
+              (result) =>
+                result
+                  ? resolve(result)
+                  : reject(Error("Could not resize this image.")),
+              format,
+              quality,
+            ),
           );
-        if (blob.size <= MAX_BYTES) break;
+          if (blob.size <= MAX_BYTES) break formats;
+          // Unsupported encoders commonly return PNG. Try JPEG next.
+          if (blob.type !== format) break;
+        }
       }
       if (blob.size > MAX_BYTES)
         throw Error(
@@ -339,7 +363,7 @@ export async function prepareScreenshot(file: File): Promise<Screenshot> {
     }
     return validateScreenshot({
       id: crypto.randomUUID(),
-      name: file.name.slice(0, 200) || "Screenshot",
+      name: safeScreenshotName(file.name),
       dataUrl: await dataUrl(blob),
     });
   } finally {

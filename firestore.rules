@@ -1,8 +1,166 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{uid}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+    function owner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+    function verifiedOwner(uid) {
+      return owner(uid) && (request.auth.token.email_verified == true
+        || request.auth.token.firebase.sign_in_provider == 'google.com');
+    }
+    function positive(value) {
+      // Numeric comparison/subtraction reject non-numeric values and infinities.
+      return value is number && value > 0 && value - value == 0;
+    }
+    function ref(value) {
+      // matches() requires string input and bounds characters in one check.
+      return value.size() == 2 && value.id.matches('(?s)^.{0,100}$')
+        && value.name.matches('(?s)^.{0,200}$');
+    }
+    function refs(values) {
+      let fallback = {'id': '', 'name': ''};
+      let images = values.concat([fallback, fallback, fallback]);
+      return values is list && values.size() <= 3
+        && ref(images[0]) && ref(images[1]) && ref(images[2]);
+    }
+    function review(value) {
+      let rules = value.rules;
+      let mistakes = value.mistakes;
+      // Validate map sizes and checkbox types as lists; check labels individually.
+      // This keeps maximum-size checklists within the 1000-expression budget.
+      let fallback = {'label': '', 'checked': false};
+      let items = rules.concat([fallback, fallback, fallback, fallback, fallback,
+        fallback, fallback, fallback, fallback, fallback,
+        fallback, fallback, fallback, fallback, fallback,
+        fallback, fallback, fallback, fallback, fallback]);
+      let tags = mistakes.concat(['', '', '', '', '', '', '', '', '', '', '', '']);
+      return value.size() == 4
+        && value.playbookId.matches('(?s)^.{0,100}$') && value.playbookName.matches('(?s)^.{0,100}$')
+        && rules is list && rules.size() <= 20
+        && mistakes is list && mistakes.size() <= 12
+        && [items[0].size(), items[1].size(), items[2].size(), items[3].size(), items[4].size(),
+          items[5].size(), items[6].size(), items[7].size(), items[8].size(), items[9].size(),
+          items[10].size(), items[11].size(), items[12].size(), items[13].size(), items[14].size(),
+          items[15].size(), items[16].size(), items[17].size(), items[18].size(), items[19].size()].hasOnly([2])
+        && [items[0].checked, items[1].checked, items[2].checked, items[3].checked, items[4].checked,
+          items[5].checked, items[6].checked, items[7].checked, items[8].checked, items[9].checked,
+          items[10].checked, items[11].checked, items[12].checked, items[13].checked, items[14].checked,
+          items[15].checked, items[16].checked, items[17].checked, items[18].checked, items[19].checked].hasOnly([true, false])
+        && items[0].label.matches('(?s)^.{0,200}$')
+        && items[1].label.matches('(?s)^.{0,200}$')
+        && items[2].label.matches('(?s)^.{0,200}$')
+        && items[3].label.matches('(?s)^.{0,200}$')
+        && items[4].label.matches('(?s)^.{0,200}$')
+        && items[5].label.matches('(?s)^.{0,200}$')
+        && items[6].label.matches('(?s)^.{0,200}$')
+        && items[7].label.matches('(?s)^.{0,200}$')
+        && items[8].label.matches('(?s)^.{0,200}$')
+        && items[9].label.matches('(?s)^.{0,200}$')
+        && items[10].label.matches('(?s)^.{0,200}$')
+        && items[11].label.matches('(?s)^.{0,200}$')
+        && items[12].label.matches('(?s)^.{0,200}$')
+        && items[13].label.matches('(?s)^.{0,200}$')
+        && items[14].label.matches('(?s)^.{0,200}$')
+        && items[15].label.matches('(?s)^.{0,200}$')
+        && items[16].label.matches('(?s)^.{0,200}$')
+        && items[17].label.matches('(?s)^.{0,200}$')
+        && items[18].label.matches('(?s)^.{0,200}$')
+        && items[19].label.matches('(?s)^.{0,200}$')
+        && tags[0].matches('(?s)^.{0,40}$')
+        && tags[1].matches('(?s)^.{0,40}$')
+        && tags[2].matches('(?s)^.{0,40}$')
+        && tags[3].matches('(?s)^.{0,40}$')
+        && tags[4].matches('(?s)^.{0,40}$')
+        && tags[5].matches('(?s)^.{0,40}$')
+        && tags[6].matches('(?s)^.{0,40}$')
+        && tags[7].matches('(?s)^.{0,40}$')
+        && tags[8].matches('(?s)^.{0,40}$')
+        && tags[9].matches('(?s)^.{0,40}$')
+        && tags[10].matches('(?s)^.{0,40}$')
+        && tags[11].matches('(?s)^.{0,40}$')
+        ;
+    }
+    function trade(value, tradeId) {
+      // All fields/containers are bounded: < 64 KiB of UTF-8 values plus bounded
+      // field names/Firestore overhead, comfortably below the 1 MiB ceiling.
+      // Map.size() is a field count, NOT the document byte size.
+      // Validate predicates together to avoid deep conjunction overhead.
+      return [
+        value.size() <= 31,
+        value.keys().hasOnly(['id', 'date', 'symbol', 'setup', 'reason', 'lesson',
+          'direction', 'session', 'emotion', 'status', 'followed', 'entry', 'stop',
+          'risk', 'pnl', 'followedPlan', 'rating', 'volume', 'volumeUnit', 'closedAt', 'closePrice', 'screenshots', 'journalReview', 'sourceTimestamp',
+          'importTimestamp', 'importSourceId', 'importTimezone', 'createdAt', 'updatedAt']),
+        value.id == tradeId,
+        tradeId.size() <= 100,
+        value.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$'),
+        value.symbol.matches('(?s)^.{0,30}$'),
+        value.setup.matches('(?s)^.{0,100}$'),
+        (value.reason is string && value.reason.size() <= 4000),
+        (value.lesson is string && value.lesson.size() <= 4000),
+        value.direction in ['Long', 'Short'],
+        value.session in ['London', 'New York', 'Asia', 'London / New York overlap', 'Other'],
+        value.emotion in ['Calm', 'Confident', 'Anxious', 'FOMO', 'Frustrated', 'calm', 'confident', 'anxious', 'impatient', 'revenge', 'fomo'],
+        (!('volume' in value) || positive(value.volume)),
+        value.get('volumeUnit', '').matches('(?s)^.{0,40}$'),
+        value.get('closedAt', '').matches('(?s)^.{0,40}$'),
+        (!('closePrice' in value) || positive(value.closePrice)),
+        (!('followedPlan' in value) || value.followedPlan is bool),
+        (!('rating' in value) || (value.rating is int && value.rating >= 1 && value.rating <= 5)),
+        value.followed in ['yes', 'no', 'unsure'],
+        positive(value.entry),
+        positive(value.stop),
+        positive(value.risk),
+        ((value.direction == 'Long' && value.stop < value.entry)
+          || (value.direction == 'Short' && value.stop > value.entry)),
+        ((value.status == 'open' && value.pnl == null)
+          || (value.status == 'closed' && value.pnl is number
+            && value.pnl - value.pnl == 0)),
+        (!('screenshots' in value) || refs(value.screenshots)),
+        (!('journalReview' in value) || review(value.journalReview)),
+        value.get('sourceTimestamp', '').matches('(?s)^.{0,40}$'),
+        value.get('importTimestamp', '').matches('(?s)^.{0,40}$'),
+        value.get('importSourceId', '').matches('(?s)^.{0,200}$'),
+        value.get('importTimezone', '').matches('(?s)^.{0,100}$'),
+        value.createdAt is timestamp,
+        value.updatedAt == request.time
+      ].hasOnly([true]);
+    }
+    match /users/{uid}/trades/{tradeId} {
+      allow read: if owner(uid);
+      allow create, update: if verifiedOwner(uid) && trade(request.resource.data, tradeId)
+        && (request.method == 'create'
+          ? request.resource.data.createdAt == request.time
+          : request.resource.data.createdAt == resource.data.createdAt);
+      allow delete: if verifiedOwner(uid);
+    }
+    match /users/{uid}/images/{imageId} {
+      allow read: if owner(uid);
+      allow delete: if verifiedOwner(uid);
+      allow create: if verifiedOwner(uid)
+        && request.resource.data.keys().hasOnly(['id', 'name', 'dataUrl', 'createdAt', 'updatedAt'])
+        && request.resource.data.id == imageId && imageId.matches('(?s)^.{0,100}$')
+        && request.resource.data.name.matches('(?s)^.{0,200}$')
+        && (request.resource.data.dataUrl is string && request.resource.data.dataUrl.size() <= 682768)
+        && request.resource.data.dataUrl.matches('^data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$')
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      // Image IDs/payloads are immutable; the app stages new IDs for replacements.
+      allow update: if false;
+    }
+    match /users/{uid}/settings/{settingId} {
+      allow read: if owner(uid);
+      allow write: if (settingId == 'onboarding' && owner(uid))
+        || (settingId == 'journal' && verifiedOwner(uid));
+    }
+    match /users/{uid}/imports/{importId} {
+      allow read: if owner(uid);
+      allow create: if verifiedOwner(uid)
+        && request.resource.data.keys().hasOnly(['completedAt'])
+        && request.resource.data.completedAt == request.time;
+    }
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

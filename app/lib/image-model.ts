@@ -1,3 +1,17 @@
+export function safeScreenshotName(name: string) {
+  const filename = name.replace(/\\/g, "/").split("/").pop() ?? "";
+  return (
+    filename
+      .replace(
+        // eslint-disable-next-line no-control-regex -- Strip controls from untrusted filenames.
+        /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069<>:"|?*]/g,
+        "",
+      )
+      .replace(/^\.+|[. ]+$/g, "")
+      .trim()
+      .slice(0, 200) || "Screenshot"
+  );
+}
 export interface ScreenshotRef {
   id: string;
   name: string;
@@ -42,5 +56,5 @@ export function validateScreenshot(value: unknown): Screenshot {
     throw Error(
       "Invalid screenshot image. Use PNG, JPEG or WebP up to 500 KB after resizing.",
     );
-  return image;
+  return { ...image, name: safeScreenshotName(image.name) };
 }

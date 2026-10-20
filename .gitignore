@@ -14,3 +14,10 @@
 /.browser-profile/
 /.price-state/
 /.journal-private/
+
+# Local security testing tools/artifacts
+/.security-tools/
+/.emulator-cache/
+/firebase-debug.log
+/firestore-debug.log
+/ui-debug.log

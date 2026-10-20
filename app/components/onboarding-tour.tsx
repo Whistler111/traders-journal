@@ -122,12 +122,16 @@ export function OnboardingTour({ enabled }: { enabled: boolean }) {
     });
     const observer = new ResizeObserver(position);
     observer.observe(el);
+    window.visualViewport?.addEventListener("resize", position);
+    window.visualViewport?.addEventListener("scroll", position);
     window.addEventListener("resize", position);
     window.addEventListener("scroll", position, true);
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
       anchor?.removeAttribute("data-tour-active");
+      window.visualViewport?.removeEventListener("resize", position);
+      window.visualViewport?.removeEventListener("scroll", position);
       window.removeEventListener("resize", position);
       window.removeEventListener("scroll", position, true);
     };

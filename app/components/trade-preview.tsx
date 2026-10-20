@@ -1,3 +1,4 @@
+import { TradeFlags } from "./behavior-summary";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowDownLeft,
@@ -38,6 +39,29 @@ export function TradePreview({
     [busy, setBusy] = useState(false),
     [images, setImages] = useState<Screenshot[] | null>(null),
     [imageError, setImageError] = useState("");
+  const imageRequest = useRef<{
+    id: string;
+    promise: Promise<Screenshot[]>;
+  } | null>(null);
+  useEffect(() => {
+    if (!trade.screenshots?.length) return;
+    let active = true;
+    if (imageRequest.current?.id !== trade.id)
+      imageRequest.current = {
+        id: trade.id,
+        promise: getScreenshots(trade.screenshots),
+      };
+    void imageRequest.current.promise
+      .then((images) => {
+        if (active) setImages(images);
+      })
+      .catch((error) => {
+        if (active) setImageError((error as Error).message);
+      });
+    return () => {
+      active = false;
+    };
+  }, [trade.id]);
   const notes = unpackNotes(trade.lesson),
     summary = tradeSummary(trade, includeNotes);
   useEffect(() => {
@@ -129,6 +153,7 @@ export function TradePreview({
         </span>
         <div>
           <h2 id="preview-title">{trade.symbol}</h2>
+          <TradeFlags id={trade.id} />
           <p>
             {trade.direction === "Long" ? "Buy / Long" : "Sell / Short"}{" "}
             <span>·</span> {tradeDate(trade.date)}
@@ -177,7 +202,70 @@ export function TradePreview({
           <dt>Initial risk · USD</dt>
           <dd>{money(trade.risk)}</dd>
         </div>
+        <div>
+          <dt>Recorded exit</dt>
+          <dd>
+            {trade.closePrice
+              ? priceFormat(trade.closePrice)
+              : notes.exit || "Not recorded"}
+          </dd>
+        </div>
+        <div>
+          <dt>Target</dt>
+          <dd>
+            {typeof trade.target === "number"
+              ? priceFormat(trade.target)
+              : "Not recorded"}
+          </dd>
+        </div>
+        <div>
+          <dt>Rating</dt>
+          <dd>{trade.rating ? `${trade.rating} / 5` : "Unrated"}</dd>
+        </div>
       </dl>
+      {!!trade.screenshots?.length && (
+        <section className="trade-chart-gallery">
+          <h3>Chart screenshots</h3>
+          {!images && (
+            <button
+              type="button"
+              className="quiet-button"
+              onClick={async () => {
+                try {
+                  setImages(await getScreenshots(trade.screenshots!));
+                  setImageError("");
+                } catch (e) {
+                  setImageError((e as Error).message);
+                }
+              }}
+            >
+              <ImageIcon size={16} />
+              Charts: view {trade.screenshots.length} screenshot
+              {trade.screenshots.length === 1 ? "" : "s"}
+            </button>
+          )}
+          {images && (
+            <div className="preview-images">
+              {images.map((image, index) => (
+                <figure key={image.id}>
+                  <figcaption>
+                    {/before/i.test(image.name)
+                      ? "Before"
+                      : /after/i.test(image.name)
+                        ? "After"
+                        : `Chart ${index + 1}`}{" "}
+                    - {image.name}
+                  </figcaption>
+                  <a href={image.dataUrl} download={image.name}>
+                    <img src={image.dataUrl} alt={image.name} />
+                  </a>
+                </figure>
+              ))}
+            </div>
+          )}
+          {imageError && <p role="alert">{imageError}</p>}
+        </section>
+      )}
       <div className="preview-reason">
         <span className="note-label">
           <ShieldCheck size={15} aria-hidden="true" />
@@ -185,7 +273,7 @@ export function TradePreview({
         </span>
         <p>{trade.reason}</p>
       </div>
-      <details className="preview-details">
+      <details className="preview-details" open>
         <summary>
           Notes & details <ChevronDown size={16} aria-hidden="true" />
         </summary>
@@ -255,36 +343,6 @@ export function TradePreview({
             "No review note yet. You can add one when you edit this trade."}
         </p>
         <p className="preview-long-note">{trade.reason}</p>
-        {!!trade.screenshots?.length && (
-          <>
-            <button
-              type="button"
-              className="quiet-button"
-              onClick={async () => {
-                try {
-                  setImages(await getScreenshots(trade.screenshots!));
-                  setImageError("");
-                } catch (e) {
-                  setImageError((e as Error).message);
-                }
-              }}
-            >
-              <ImageIcon size={16} />
-              View {trade.screenshots.length} screenshot
-              {trade.screenshots.length === 1 ? "" : "s"}
-            </button>
-            {images && (
-              <div className="preview-images">
-                {images.map((image) => (
-                  <a key={image.id} href={image.dataUrl} download={image.name}>
-                    <img src={image.dataUrl} alt={image.name} />
-                  </a>
-                ))}
-              </div>
-            )}
-            {imageError && <p role="alert">{imageError}</p>}
-          </>
-        )}
       </details>
       <div className="preview-actions">
         <button type="button" className="quiet-button" onClick={onEdit}>
